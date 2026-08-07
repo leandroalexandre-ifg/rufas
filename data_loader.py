@@ -12,15 +12,39 @@ import pandas as pd
 import streamlit as st
 
 
+_SAVE_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
+
+
 @st.cache_resource(show_spinner=False)
 def save_uploaded_file(uploaded_file) -> str:
     """Salva o arquivo enviado via st.file_uploader em disco e retorna o
     caminho. Cacheado pelo próprio uploaded_file (Streamlit já sabe hashear
-    esse tipo), então um novo upload gera um novo arquivo."""
+    esse tipo), então um novo upload gera um novo arquivo.
+
+    Escreve em blocos (em vez de tudo de uma vez) para poder mostrar uma
+    barra de progresso — só aparece na primeira vez (cache miss); em
+    reruns com o mesmo arquivo, o cache pula direto pro resultado."""
     suffix = os.path.splitext(uploaded_file.name)[1] or ".csv"
     fd, path = tempfile.mkstemp(prefix="rufas_upload_", suffix=suffix)
-    with os.fdopen(fd, "wb") as f:
-        f.write(uploaded_file.getbuffer())
+    total_size = uploaded_file.size or 0
+    written = 0
+    uploaded_file.seek(0)
+    progress = st.progress(0.0, text="Salvando arquivo enviado...")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            while True:
+                chunk = uploaded_file.read(_SAVE_CHUNK_SIZE)
+                if not chunk:
+                    break
+                f.write(chunk)
+                written += len(chunk)
+                fraction = min(written / total_size, 1.0) if total_size else 1.0
+                progress.progress(
+                    fraction,
+                    text=f"Salvando arquivo enviado... {written / 1e6:.0f} / {total_size / 1e6:.0f} MB",
+                )
+    finally:
+        progress.empty()
     return path
 
 
