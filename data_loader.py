@@ -12,7 +12,27 @@ import pandas as pd
 import streamlit as st
 
 
-_SAVE_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
+_SAVE_CHUNK_SIZE = 4 * 1024 * 1024  # 4MB
+
+_PROGRESS_BAR_HTML = """
+<div style="margin: 0.4rem 0 1rem 0;">
+  <div style="font-weight:600; margin-bottom:6px;">{label}</div>
+  <div style="background:#dde3ea; border-radius:8px; height:30px; width:100%; overflow:hidden;">
+    <div style="background:#1565C0; height:100%; width:{pct}%;
+                display:flex; align-items:center; justify-content:flex-end;
+                color:white; font-weight:700; font-size:0.85rem; padding-right:10px;
+                white-space:nowrap; transition:width 0.15s linear;">
+      {pct}%
+    </div>
+  </div>
+</div>
+"""
+
+
+def _render_progress(placeholder, fraction: float, written: int, total: int) -> None:
+    pct = int(min(fraction, 1.0) * 100)
+    label = f"Salvando arquivo enviado... {written / 1e6:.0f} / {total / 1e6:.0f} MB"
+    placeholder.markdown(_PROGRESS_BAR_HTML.format(label=label, pct=pct), unsafe_allow_html=True)
 
 
 @st.cache_resource(show_spinner=False)
@@ -21,15 +41,17 @@ def save_uploaded_file(uploaded_file) -> str:
     caminho. Cacheado pelo próprio uploaded_file (Streamlit já sabe hashear
     esse tipo), então um novo upload gera um novo arquivo.
 
-    Escreve em blocos (em vez de tudo de uma vez) para poder mostrar uma
-    barra de progresso — só aparece na primeira vez (cache miss); em
+    Escreve em blocos (em vez de tudo de uma vez) para mostrar uma barra de
+    progresso customizada (azul, com destaque — a st.progress nativa é fina
+    demais e usa a cor do tema). Só aparece na primeira vez (cache miss); em
     reruns com o mesmo arquivo, o cache pula direto pro resultado."""
     suffix = os.path.splitext(uploaded_file.name)[1] or ".csv"
     fd, path = tempfile.mkstemp(prefix="rufas_upload_", suffix=suffix)
     total_size = uploaded_file.size or 0
     written = 0
     uploaded_file.seek(0)
-    progress = st.progress(0.0, text="Salvando arquivo enviado...")
+    placeholder = st.empty()
+    _render_progress(placeholder, 0.0, 0, total_size)
     try:
         with os.fdopen(fd, "wb") as f:
             while True:
@@ -38,13 +60,10 @@ def save_uploaded_file(uploaded_file) -> str:
                     break
                 f.write(chunk)
                 written += len(chunk)
-                fraction = min(written / total_size, 1.0) if total_size else 1.0
-                progress.progress(
-                    fraction,
-                    text=f"Salvando arquivo enviado... {written / 1e6:.0f} / {total_size / 1e6:.0f} MB",
-                )
+                fraction = written / total_size if total_size else 1.0
+                _render_progress(placeholder, fraction, written, total_size)
     finally:
-        progress.empty()
+        placeholder.empty()
     return path
 
 
