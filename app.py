@@ -5,6 +5,7 @@ as variáveis. Não executa o modelo nem gera arquivos de entrada.
 """
 
 import os
+from pathlib import Path
 
 import plotly.express as px
 import streamlit as st
@@ -24,27 +25,38 @@ MAX_POINTS_PER_CHART = 3000
 MAX_VARIABLES_TO_PLOT = 3
 CHART_HEIGHT = 400
 
+# CSV incluído no próprio repositório (resolução semanal, ~12MB — cabe em
+# git normal, sem LFS) — carregado automaticamente ao abrir, sem depender
+# de upload. Caminho resolvido a partir deste arquivo, não do diretório de
+# trabalho, pra funcionar igual local ou publicado.
+LOCAL_CSV_PATH = Path(__file__).parent / "data" / "freestall_resultado_semanal.csv"
+
 st.set_page_config(page_title="Resultados do RuFaS", layout="wide")
 st.title("Dashboard de Resultados do RuFaS")
-
-st.subheader("Envie o CSV de resultado do RuFaS")
-uploaded_file = st.file_uploader("Arquivo CSV de resultado da simulação", type=["csv", "txt"])
 
 if st.button("Limpar cache"):
     save_uploaded_file.clear()
     st.session_state.pop("loaded_columns", None)
     st.rerun()
 
-if uploaded_file is None:
-    st.info("Envie um arquivo CSV de resultado do RuFaS acima para começar.")
-    st.stop()
+path = None
+if LOCAL_CSV_PATH.is_file():
+    path = str(LOCAL_CSV_PATH)
+    st.caption(f"Usando o CSV incluído no repositório: {LOCAL_CSV_PATH.name}")
+else:
+    st.subheader("Envie o CSV de resultado do RuFaS")
+    uploaded_file = st.file_uploader("Arquivo CSV de resultado da simulação", type=["csv", "txt"])
 
-try:
-    path = save_uploaded_file(uploaded_file)
-    st.caption(f"Arquivo enviado: {uploaded_file.name}")
-except Exception as exc:
-    st.error(f"Não foi possível processar o arquivo enviado: {exc}")
-    st.stop()
+    if uploaded_file is None:
+        st.info("Envie um arquivo CSV de resultado do RuFaS acima para começar.")
+        st.stop()
+
+    try:
+        path = save_uploaded_file(uploaded_file)
+        st.caption(f"Arquivo enviado: {uploaded_file.name}")
+    except Exception as exc:
+        st.error(f"Não foi possível processar o arquivo enviado: {exc}")
+        st.stop()
 
 if not os.path.isfile(path):
     st.error(f"Arquivo não encontrado após o carregamento: {path}")
