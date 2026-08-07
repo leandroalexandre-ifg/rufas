@@ -49,26 +49,37 @@ if st.button("Limpar cache de download"):
 
 path = None
 if uploaded_file is not None:
-    path = save_uploaded_file(uploaded_file)
-    st.caption(f"Fonte dos dados: arquivo enviado ({uploaded_file.name})")
-elif drive_link.strip():
-    file_id = extract_drive_file_id(drive_link)
-    if file_id is None:
-        st.error(
-            "Não reconheci esse link do Google Drive. Confira se é um link "
-            "de compartilhamento válido (Compartilhar → Copiar link)."
-        )
-        st.stop()
     try:
+        path = save_uploaded_file(uploaded_file)
+        st.caption(f"Fonte dos dados: arquivo enviado ({uploaded_file.name})")
+    except Exception as exc:
+        st.error(f"Não foi possível processar o arquivo enviado: {exc}")
+        st.stop()
+elif drive_link.strip():
+    # Bloco inteiro (extração do link + download + validação) num só
+    # try/except: qualquer falha aqui vira uma mensagem clara na tela em vez
+    # de derrubar o app inteiro. O upload manual acima continua disponível
+    # como alternativa em qualquer um desses casos.
+    try:
+        file_id = extract_drive_file_id(drive_link)
+        if file_id is None:
+            raise ValueError(
+                "não reconheci esse link do Google Drive — confira se é um "
+                "link de compartilhamento válido (Compartilhar → Copiar link)."
+            )
         with st.spinner(
             "Baixando CSV do Google Drive — pode levar alguns minutos "
             "em arquivos grandes na primeira vez..."
         ):
             path = download_from_drive(file_id)
+        st.caption("Fonte dos dados: Google Drive")
     except Exception as exc:
-        st.error(f"Não foi possível baixar o arquivo do Google Drive: {exc}")
+        st.error(
+            f"Não foi possível baixar o arquivo do Google Drive: {exc}. "
+            "Você pode tentar novamente ou enviar o CSV manualmente pelo "
+            "botão de upload acima."
+        )
         st.stop()
-    st.caption("Fonte dos dados: Google Drive")
 
 if path is None:
     st.info(
