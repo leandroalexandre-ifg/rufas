@@ -10,7 +10,6 @@ import plotly.express as px
 import streamlit as st
 
 from data_loader import read_columns, read_data, save_uploaded_file
-from drive_loader import download_from_drive, extract_drive_file_id
 from filters import (
     build_regex,
     classify_column,
@@ -28,64 +27,23 @@ CHART_HEIGHT = 400
 st.set_page_config(page_title="Resultados do RuFaS", layout="wide")
 st.title("Dashboard de Resultados do RuFaS")
 
-try:
-    default_drive_link = st.secrets.get("drive_share_link", "")
-except Exception:
-    default_drive_link = ""
+st.subheader("Envie o CSV de resultado do RuFaS")
+uploaded_file = st.file_uploader("Arquivo CSV de resultado da simulação", type=["csv", "txt"])
 
-st.subheader("Fonte dos dados")
-drive_link = st.text_input(
-    "Link de compartilhamento do Google Drive",
-    value=default_drive_link,
-    placeholder="https://drive.google.com/file/d/.../view?usp=sharing",
-)
-uploaded_file = st.file_uploader("Ou envie o CSV da sua máquina", type=["csv", "txt"])
-
-if st.button("Limpar cache de download"):
-    download_from_drive.clear()
+if st.button("Limpar cache"):
     save_uploaded_file.clear()
     st.session_state.pop("loaded_columns", None)
     st.rerun()
 
-path = None
-if uploaded_file is not None:
-    try:
-        path = save_uploaded_file(uploaded_file)
-        st.caption(f"Fonte dos dados: arquivo enviado ({uploaded_file.name})")
-    except Exception as exc:
-        st.error(f"Não foi possível processar o arquivo enviado: {exc}")
-        st.stop()
-elif drive_link.strip():
-    # Bloco inteiro (extração do link + download + validação) num só
-    # try/except: qualquer falha aqui vira uma mensagem clara na tela em vez
-    # de derrubar o app inteiro. O upload manual acima continua disponível
-    # como alternativa em qualquer um desses casos.
-    try:
-        file_id = extract_drive_file_id(drive_link)
-        if file_id is None:
-            raise ValueError(
-                "não reconheci esse link do Google Drive — confira se é um "
-                "link de compartilhamento válido (Compartilhar → Copiar link)."
-            )
-        with st.spinner(
-            "Baixando CSV do Google Drive — pode levar alguns minutos "
-            "em arquivos grandes na primeira vez..."
-        ):
-            path = download_from_drive(file_id)
-        st.caption("Fonte dos dados: Google Drive")
-    except Exception as exc:
-        st.error(
-            f"Não foi possível baixar o arquivo do Google Drive: {exc}. "
-            "Você pode tentar novamente ou enviar o CSV manualmente pelo "
-            "botão de upload acima."
-        )
-        st.stop()
+if uploaded_file is None:
+    st.info("Envie um arquivo CSV de resultado do RuFaS acima para começar.")
+    st.stop()
 
-if path is None:
-    st.info(
-        "Cole um link de compartilhamento do Google Drive acima ou envie um "
-        "arquivo CSV para começar."
-    )
+try:
+    path = save_uploaded_file(uploaded_file)
+    st.caption(f"Arquivo enviado: {uploaded_file.name}")
+except Exception as exc:
+    st.error(f"Não foi possível processar o arquivo enviado: {exc}")
     st.stop()
 
 if not os.path.isfile(path):
